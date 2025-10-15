@@ -1,6 +1,9 @@
-import * as N3 from 'n3';
+// CRITICAL: Import N3 from CDN for browser compatibility
+import * as N3 from 'https://esm.sh/n3@1.17.2';
+// CRITICAL: Import mntl-space-fab so it registers itself
+import '@mmmlib/mntl-space-fab/src/mntl-space-fab.js';
 
-// Import mntl-space-fab - handles its own registration
+// Default accepted types (only open and publ for security)
 const DEFAULT_ACCEPTED_TYPES = [
   { 
     value: 'mntl:open', 
@@ -146,6 +149,7 @@ class TTLEditorFormWC extends HTMLElement {
           resize: vertical;
           box-sizing: border-box;
           background: #ffffff;
+          display: block;
         }
         
         .ttl-textarea:focus {
