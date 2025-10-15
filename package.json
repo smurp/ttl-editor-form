@@ -1,0 +1,34 @@
+{
+  "name": "@mmmlib/ttl-editor-form",
+  "version": "0.1.0",
+  "description": "Web component for bulk Turtle (TTL) ingestion into MMM",
+  "type": "module",
+  "main": "src/ttl-editor-form.js",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "npx http-server . -p 8002 -c-1",
+    "test": "echo 'No tests yet' && exit 0"
+  },
+  "keywords": [
+    "rdf",
+    "turtle",
+    "ttl",
+    "web-component",
+    "mmm",
+    "semantic-web"
+  ],
+  "author": "Smurp",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "n3": "^1.17.2",
+    "@mmmlib/mntl-space-fab": "github:smurp/mntl-space-fab#main"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smurp/ttl-editor-form.git"
+  }
+}
