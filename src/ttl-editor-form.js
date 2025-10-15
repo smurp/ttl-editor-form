@@ -315,7 +315,7 @@ class TTLEditorFormWC extends HTMLElement {
       
       <div class="form-container">
         <div class="header">
-          <h2 style="margin: 0; color: #343a40;">📝 Turtle Editor</h2>
+          <h2 style="margin: 0; color: #343a40;">Ͳ Turtle Editor</h2>
           <div class="attribution">
             <div class="attr-item">
               <span class="attr-label">at:</span>
