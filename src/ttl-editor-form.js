@@ -1,7 +1,10 @@
 // CRITICAL: Import N3 from CDN for browser compatibility
+console.log('🔧 [TTL-EDITOR] Starting module...');
 import * as N3 from 'https://esm.sh/n3@1.17.2';
-// CRITICAL: Import mntl-space-fab so it registers itself
-import '@mmmlib/mntl-space-fab/src/mntl-space-fab.js';
+console.log('✅ [TTL-EDITOR] N3 imported:', !!N3);
+
+// NO STATIC IMPORT of mntl-space-fab - we'll load it dynamically
+console.log('🔧 [TTL-EDITOR] Will load mntl-space-fab dynamically when needed');
 
 // Default accepted types (only open and publ for security)
 const DEFAULT_ACCEPTED_TYPES = [
@@ -17,16 +20,21 @@ const DEFAULT_ACCEPTED_TYPES = [
   }
 ];
 
+console.log('🔧 [TTL-EDITOR] Defining component class...');
+
 class TTLEditorFormWC extends HTMLElement {
   constructor() {
     super();
+    console.log('🏗️ [TTL-EDITOR] Constructor called');
     this.attachShadow({ mode: 'open' });
+    console.log('✅ [TTL-EDITOR] Shadow DOM attached');
     
     // State
     this._mmmServer = null;
     this._currentIdentity = null;
     this._defaultGraph = 'mntl:publ/imported';
     this._acceptedTypes = [...DEFAULT_ACCEPTED_TYPES];
+    this._mntlSpaceFabLoaded = false;
     
     this.ttlContent = '';
     this.isValid = false;
@@ -34,6 +42,7 @@ class TTLEditorFormWC extends HTMLElement {
     this.tripleCount = 0;
     
     this._updateTimer = null;
+    console.log('✅ [TTL-EDITOR] State initialized');
   }
   
   get mmmServer() { return this._mmmServer; }
@@ -41,6 +50,7 @@ class TTLEditorFormWC extends HTMLElement {
   
   get currentIdentity() { return this._currentIdentity; }
   set currentIdentity(value) {
+    console.log('🔧 [TTL-EDITOR] Setting currentIdentity:', value);
     this._currentIdentity = value;
     this.updateAttribution();
     this.updateFab();
@@ -48,6 +58,7 @@ class TTLEditorFormWC extends HTMLElement {
   
   get defaultGraph() { return this._defaultGraph; }
   set defaultGraph(value) {
+    console.log('🔧 [TTL-EDITOR] Setting defaultGraph:', value);
     this._defaultGraph = value;
     this.updateFab();
   }
@@ -55,31 +66,80 @@ class TTLEditorFormWC extends HTMLElement {
   get acceptedTypes() { return this._acceptedTypes; }
   set acceptedTypes(types) {
     if (Array.isArray(types) && types.length > 0) {
+      console.log('🔧 [TTL-EDITOR] Setting acceptedTypes:', types.length, 'types');
       this._acceptedTypes = types;
       this.updateFab();
     }
   }
   
-  connectedCallback() {
-    this.render();
-    this.setupFab();
-    this.attachEventListeners();
-    this.updateAttribution();
+  async connectedCallback() {
+    console.log('🔌 [TTL-EDITOR] connectedCallback - component added to DOM');
     
-    this._updateTimer = setInterval(() => this.updateAttribution(), 1000);
+    try {
+      // CRITICAL: Load mntl-space-fab dynamically (matching quad-form pattern)
+      await this.loadMntlSpaceFab();
+      
+      console.log('🎨 [TTL-EDITOR] Calling render()...');
+      this.render();
+      console.log('✅ [TTL-EDITOR] render() completed');
+      
+      console.log('🎛️ [TTL-EDITOR] Calling setupFab()...');
+      this.setupFab();
+      console.log('✅ [TTL-EDITOR] setupFab() completed');
+      
+      console.log('🔗 [TTL-EDITOR] Calling attachEventListeners()...');
+      this.attachEventListeners();
+      console.log('✅ [TTL-EDITOR] attachEventListeners() completed');
+      
+      console.log('⏰ [TTL-EDITOR] Calling updateAttribution()...');
+      this.updateAttribution();
+      console.log('✅ [TTL-EDITOR] updateAttribution() completed');
+      
+      this._updateTimer = setInterval(() => this.updateAttribution(), 1000);
+      console.log('✅ [TTL-EDITOR] Update timer started');
+    } catch (error) {
+      console.error('❌ [TTL-EDITOR] Error in connectedCallback:', error);
+    }
+  }
+  
+  async loadMntlSpaceFab() {
+    console.log('📦 [TTL-EDITOR] loadMntlSpaceFab() starting...');
+    
+    // Check if already loaded
+    if (customElements.get('mntl-space-fab')) {
+      console.log('✅ [TTL-EDITOR] mntl-space-fab already registered');
+      this._mntlSpaceFabLoaded = true;
+      return;
+    }
+    
+    // Try to dynamically load it from the server route
+    try {
+      console.log('🔄 [TTL-EDITOR] Attempting to load mntl-space-fab from /mntl-space-fab/src/mntl-space-fab.js');
+      await import('/mntl-space-fab/src/mntl-space-fab.js');
+      console.log('✅ [TTL-EDITOR] Successfully loaded mntl-space-fab');
+      this._mntlSpaceFabLoaded = true;
+    } catch (err) {
+      console.error('❌ [TTL-EDITOR] Failed to load mntl-space-fab:', err);
+      console.warn('⚠️ [TTL-EDITOR] Will show error message to user');
+      this._mntlSpaceFabLoaded = false;
+      // Don't throw - we'll show a fallback UI
+    }
   }
   
   disconnectedCallback() {
+    console.log('🔌 [TTL-EDITOR] disconnectedCallback - component removed from DOM');
     if (this._updateTimer) {
       clearInterval(this._updateTimer);
     }
   }
   
   render() {
+    console.log('🎨 [TTL-EDITOR] render() starting...');
     const identity = this._currentIdentity || 'not logged in';
     const isAuthenticated = !!this._currentIdentity;
+    console.log('🎨 [TTL-EDITOR] identity:', identity, 'isAuthenticated:', isAuthenticated);
     
-    this.shadowRoot.innerHTML = `
+    const html = `
       <style>
         :host {
           display: block;
@@ -199,6 +259,15 @@ class TTLEditorFormWC extends HTMLElement {
           white-space: pre-wrap;
         }
         
+        .component-error {
+          background: #f8d7da;
+          border: 2px solid #f5c6cb;
+          color: #721c24;
+          padding: 15px;
+          border-radius: 6px;
+          margin-bottom: 20px;
+        }
+        
         .submit-section {
           display: flex;
           justify-content: flex-end;
@@ -279,7 +348,13 @@ ex:Charlie a ex:Person ;
         
         <div class="section">
           <label class="section-label">Target Graph</label>
-          <mntl-space-fab id="graph-fab"></mntl-space-fab>
+          ${this._mntlSpaceFabLoaded 
+            ? '<mntl-space-fab id="graph-fab"></mntl-space-fab>'
+            : `<div class="component-error">
+                 ❌ Failed to load mntl-space-fab component.<br>
+                 <small>Check that the MMM server is running and /mntl-space-fab/ route is registered.</small>
+               </div>`
+          }
         </div>
         
         <div class="submit-section">
@@ -290,22 +365,61 @@ ex:Charlie a ex:Person ;
         </div>
       </div>
     `;
+    
+    console.log('🎨 [TTL-EDITOR] Setting shadowRoot.innerHTML (length:', html.length, ')');
+    this.shadowRoot.innerHTML = html;
+    console.log('✅ [TTL-EDITOR] shadowRoot.innerHTML set');
+    
+    // Verify elements exist
+    const container = this.shadowRoot.querySelector('.form-container');
+    const textarea = this.shadowRoot.getElementById('ttl-input');
+    const fab = this.shadowRoot.getElementById('graph-fab');
+    console.log('🔍 [TTL-EDITOR] Elements check:');
+    console.log('  - .form-container:', !!container);
+    console.log('  - #ttl-input:', !!textarea);
+    console.log('  - #graph-fab:', !!fab);
   }
   
   setupFab() {
+    console.log('🎛️ [TTL-EDITOR] setupFab() starting...');
+    
+    if (!this._mntlSpaceFabLoaded) {
+      console.warn('⚠️ [TTL-EDITOR] Skipping fab setup - component not loaded');
+      return;
+    }
+    
     const fab = this.shadowRoot.getElementById('graph-fab');
+    console.log('🎛️ [TTL-EDITOR] fab element:', !!fab);
+    
     if (fab) {
+      console.log('🎛️ [TTL-EDITOR] Setting fab properties...');
       fab.currentIdentity = this._currentIdentity;
+      console.log('  - currentIdentity set:', this._currentIdentity);
+      
       fab.acceptedTypes = this._acceptedTypes;
+      console.log('  - acceptedTypes set:', this._acceptedTypes.length, 'types');
+      
       fab.value = this._defaultGraph;
+      console.log('  - value set:', this._defaultGraph);
       
       fab.addEventListener('graph-changed', () => {
+        console.log('📊 [TTL-EDITOR] graph-changed event received');
         this.updateSubmitButton();
       });
+      console.log('  - event listener attached');
+    } else {
+      console.warn('⚠️ [TTL-EDITOR] fab element not found!');
     }
   }
   
   updateFab() {
+    console.log('🔄 [TTL-EDITOR] updateFab() starting...');
+    
+    if (!this._mntlSpaceFabLoaded) {
+      console.warn('⚠️ [TTL-EDITOR] Skipping fab update - component not loaded');
+      return;
+    }
+    
     const fab = this.shadowRoot.getElementById('graph-fab');
     if (fab) {
       fab.currentIdentity = this._currentIdentity;
@@ -313,27 +427,47 @@ ex:Charlie a ex:Person ;
       if (this._defaultGraph) {
         fab.value = this._defaultGraph;
       }
+      console.log('✅ [TTL-EDITOR] fab updated');
+    } else {
+      console.warn('⚠️ [TTL-EDITOR] fab element not found in updateFab');
     }
   }
   
   attachEventListeners() {
+    console.log('🔗 [TTL-EDITOR] attachEventListeners() starting...');
     const textarea = this.shadowRoot.getElementById('ttl-input');
     const submitBtn = this.shadowRoot.getElementById('submit-btn');
     const clearBtn = this.shadowRoot.getElementById('clear-btn');
     
+    console.log('🔗 [TTL-EDITOR] Elements:');
+    console.log('  - textarea:', !!textarea);
+    console.log('  - submitBtn:', !!submitBtn);
+    console.log('  - clearBtn:', !!clearBtn);
+    
     let debounceTimer;
     textarea?.addEventListener('input', (e) => {
+      console.log('✏️ [TTL-EDITOR] textarea input event');
       this.ttlContent = e.target.value;
       
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
+        console.log('🔍 [TTL-EDITOR] Validating TTL...');
         this.validateTTL();
         this.updateSubmitButton();
       }, 300);
     });
     
-    submitBtn?.addEventListener('click', () => this.handleSubmit());
-    clearBtn?.addEventListener('click', () => this.clear());
+    submitBtn?.addEventListener('click', () => {
+      console.log('🚀 [TTL-EDITOR] Submit button clicked');
+      this.handleSubmit();
+    });
+    
+    clearBtn?.addEventListener('click', () => {
+      console.log('🗑️ [TTL-EDITOR] Clear button clicked');
+      this.clear();
+    });
+    
+    console.log('✅ [TTL-EDITOR] Event listeners attached');
   }
   
   validateTTL() {
@@ -360,12 +494,14 @@ ex:Charlie a ex:Person ;
     }
     
     try {
+      console.log('🔍 [TTL-EDITOR] Parsing TTL with N3...');
       const parser = new N3.Parser();
       const triples = parser.parse(this.ttlContent);
       
       this.isValid = true;
       this.validationError = null;
       this.tripleCount = triples.length;
+      console.log('✅ [TTL-EDITOR] Valid TTL:', this.tripleCount, 'triples');
       
       textarea?.classList.remove('invalid');
       textarea?.classList.add('valid');
@@ -382,6 +518,7 @@ ex:Charlie a ex:Person ;
       }));
       
     } catch (error) {
+      console.error('❌ [TTL-EDITOR] Parse error:', error);
       this.isValid = false;
       this.validationError = error.message;
       this.tripleCount = 0;
@@ -407,6 +544,15 @@ ex:Charlie a ex:Person ;
   
   updateSubmitButton() {
     const submitBtn = this.shadowRoot.getElementById('submit-btn');
+    
+    if (!this._mntlSpaceFabLoaded) {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.title = 'Cannot submit - mntl-space-fab component not loaded';
+      }
+      return;
+    }
+    
     const fab = this.shadowRoot.getElementById('graph-fab');
     if (!submitBtn || !fab) return;
     
@@ -442,12 +588,15 @@ ex:Charlie a ex:Person ;
   }
   
   async handleSubmit() {
-    if (!this.isValid || !this._currentIdentity) return;
+    console.log('🚀 [TTL-EDITOR] handleSubmit() starting...');
+    if (!this.isValid || !this._currentIdentity || !this._mntlSpaceFabLoaded) return;
     
     const fab = this.shadowRoot.getElementById('graph-fab');
     const graph = fab.getValue();
     const at = new Date().toISOString();
     const by = this._currentIdentity;
+    
+    console.log('📦 [TTL-EDITOR] Submitting:', { graph, by, tripleCount: this.tripleCount });
     
     try {
       if (this._mmmServer) {
@@ -472,6 +621,7 @@ ex:Charlie a ex:Person ;
         }
       }
       
+      console.log('✅ [TTL-EDITOR] Submission successful');
       this.dispatchEvent(new CustomEvent('ttl-submitted', {
         detail: { ttl: this.ttlContent, graph, at, by, tripleCount: this.tripleCount },
         bubbles: true,
@@ -481,7 +631,7 @@ ex:Charlie a ex:Person ;
       this.clear();
       
     } catch (error) {
-      console.error('❌ TTL submission failed:', error);
+      console.error('❌ [TTL-EDITOR] Submission failed:', error);
       
       this.dispatchEvent(new CustomEvent('ttl-error', {
         detail: { error },
@@ -494,6 +644,7 @@ ex:Charlie a ex:Person ;
   }
   
   clear() {
+    console.log('🗑️ [TTL-EDITOR] Clearing form...');
     this.ttlContent = '';
     this.isValid = false;
     this.validationError = null;
@@ -513,6 +664,7 @@ ex:Charlie a ex:Person ;
     }
     
     this.updateSubmitButton();
+    console.log('✅ [TTL-EDITOR] Form cleared');
   }
   
   escapeHtml(text) {
@@ -522,6 +674,8 @@ ex:Charlie a ex:Person ;
   }
 }
 
+console.log('📝 [TTL-EDITOR] Registering custom element...');
 customElements.define('ttl-editor-form', TTLEditorFormWC);
+console.log('✅ [TTL-EDITOR] Custom element registered as ttl-editor-form');
 
 export { TTLEditorFormWC };

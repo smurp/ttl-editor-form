@@ -2,6 +2,8 @@
 
 A standalone web component for bulk Turtle (TTL) ingestion into MMM.
 
+![TTL Editor Form Example](img/example1.png)
+
 ## Features
 
 - 🎯 **Bulk TTL ingestion** - Paste or type Turtle directly
@@ -61,7 +63,7 @@ cd ~/REPOS/mntl-space-fab
 # Run dev server
 cd ~/REPOS/ttl-editor-form
 npm run dev
-# Visit http://localhost:8080/example/
+# Visit http://localhost:8002/example/
 ```
 
 ## Usage
@@ -86,20 +88,77 @@ form.addEventListener('ttl-submitted', (e) => {
 });
 ```
 
-## API
+## API Reference
 
 ### Properties
 
-- `mmmServer` - MMMServer instance
-- `currentIdentity` - User identity (required)
-- `defaultGraph` - Default graph URI
+- `mmmServer` - MMMServer instance for direct submission
+- `currentIdentity` - User identity (required for authentication)
+- `defaultGraph` - Default graph URI (default: 'mntl:publ/imported')
 - `acceptedTypes` - Array of mental space types
 
 ### Events
 
-- `ttl-submitted` - Success
-- `validation-changed` - Validation state changed
-- `ttl-error` - Submission error
+- `ttl-submitted` - Fired when TTL successfully submitted
+  - `detail: { ttl, graph, at, by, tripleCount }`
+- `validation-changed` - Fired when validation state changes
+  - `detail: { valid, error?, tripleCount? }`
+- `ttl-error` - Fired on submission error
+  - `detail: { error }`
+
+### Methods
+
+- `clear()` - Clear the textarea and reset validation
+
+## Component Loading
+
+The ttl-editor-form uses **dynamic loading** for its dependency on `mntl-space-fab`:
+
+- Automatically loads mntl-space-fab from `/mntl-space-fab/src/mntl-space-fab.js`
+- Graceful fallback with error message if component can't load
+- Requires MMM server to have registered the route: `app.use('/mntl-space-fab', ...)`
+
+This matches the pattern used by quad-form for maximum portability across deployment contexts (browser, Electron, extensions, etc.).
+
+## Server-Side Integration
+
+The form expects a POST endpoint at `/mmm/api/ingest-ttl`:
+
+```javascript
+router.post('/api/ingest-ttl', async (req, res) => {
+  const { ttl, graph, by } = req.body;
+  
+  try {
+    const parser = new N3.Parser();
+    const quads = parser.parse(ttl);
+    
+    // Convert to MMM format and ingest
+    const results = await Promise.all(
+      quads.map(quad => mmmServer.ingestFlat({
+        s: quad.subject.value,
+        p: quad.predicate.value,
+        o: quad.object.value,
+        g: graph,
+        at: new Date().toISOString(),
+        by: by,
+        ...(quad.object.datatype && { d: quad.object.datatype.value }),
+        ...(quad.object.language && { l: quad.object.language })
+      }))
+    );
+    
+    res.json({
+      success: true,
+      tripleCount: results.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+```
 
 ## License
 

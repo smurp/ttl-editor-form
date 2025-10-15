@@ -1,6 +1,6 @@
 {
   "name": "@mmmlib/ttl-editor-form",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Web component for bulk Turtle (TTL) ingestion into MMM",
   "type": "module",
   "main": "src/ttl-editor-form.js",
