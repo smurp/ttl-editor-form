@@ -1,10 +1,45 @@
+
+const LOGGING = {
+  enabled: typeof localStorage !== 'undefined'
+    ? localStorage.getItem('ttoys:log-ttl-editor-form') !== 'false'
+    : true,
+  marker: 'Ͳ FOR:',
+
+  log(action, data) {
+    if (!this.enabled) return;
+    console.log(this.marker, JSON.stringify({
+      action,
+      timestamp: Date.now(),
+      ...data
+    }));
+  },
+
+  warn(action, data) {
+    if (!this.enabled) return;
+    console.warn(this.marker, JSON.stringify({
+      action,
+      timestamp: Date.now(),
+      ...data
+    }));
+  },
+
+  error(action, data) {
+    console.error(this.marker, JSON.stringify({
+      action,
+      timestamp: Date.now(),
+      ...data
+    }));
+  }
+};
+LOGGING.log('🔧 [TTL-EDITOR] Starting module...');
+LOGGING.enabled = false;
 // CRITICAL: Import N3 from CDN for browser compatibility
-console.log('🔧 [TTL-EDITOR] Starting module...');
 import * as N3 from 'https://esm.sh/n3@1.17.2';
-console.log('✅ [TTL-EDITOR] N3 imported:', !!N3);
+LOGGING.log('✅ [TTL-EDITOR] N3 imported:', !!N3);
+
 
 // NO STATIC IMPORT of mntl-space-fab - we'll load it dynamically
-console.log('🔧 [TTL-EDITOR] Will load mntl-space-fab dynamically when needed');
+LOGGING.log('🔧 [TTL-EDITOR] Will load mntl-space-fab dynamically when needed');
 
 // Default accepted types (only open and publ for security)
 const DEFAULT_ACCEPTED_TYPES = [
@@ -20,14 +55,14 @@ const DEFAULT_ACCEPTED_TYPES = [
   }
 ];
 
-console.log('🔧 [TTL-EDITOR] Defining component class...');
+LOGGING.log('🔧 [TTL-EDITOR] Defining component class...');
 
 class TTLEditorFormWC extends HTMLElement {
   constructor() {
     super();
-    console.log('🏗️ [TTL-EDITOR] Constructor called');
+    LOGGING.log('🏗️ [TTL-EDITOR] Constructor called');
     this.attachShadow({ mode: 'open' });
-    console.log('✅ [TTL-EDITOR] Shadow DOM attached');
+    LOGGING.log('✅ [TTL-EDITOR] Shadow DOM attached');
     
     // State
     this._mmmServer = null;
@@ -42,7 +77,7 @@ class TTLEditorFormWC extends HTMLElement {
     this.tripleCount = 0;
     
     this._updateTimer = null;
-    console.log('✅ [TTL-EDITOR] State initialized');
+    LOGGING.log('✅ [TTL-EDITOR] State initialized');
   }
   
   get mmmServer() { return this._mmmServer; }
@@ -50,7 +85,7 @@ class TTLEditorFormWC extends HTMLElement {
   
   get currentIdentity() { return this._currentIdentity; }
   set currentIdentity(value) {
-    console.log('🔧 [TTL-EDITOR] Setting currentIdentity:', value);
+    LOGGING.log('🔧 [TTL-EDITOR] Setting currentIdentity:', value);
     this._currentIdentity = value;
     this.updateAttribution();
     this.updateFab();
@@ -58,7 +93,7 @@ class TTLEditorFormWC extends HTMLElement {
   
   get defaultGraph() { return this._defaultGraph; }
   set defaultGraph(value) {
-    console.log('🔧 [TTL-EDITOR] Setting defaultGraph:', value);
+    LOGGING.log('🔧 [TTL-EDITOR] Setting defaultGraph:', value);
     this._defaultGraph = value;
     this.updateFab();
   }
@@ -66,60 +101,60 @@ class TTLEditorFormWC extends HTMLElement {
   get acceptedTypes() { return this._acceptedTypes; }
   set acceptedTypes(types) {
     if (Array.isArray(types) && types.length > 0) {
-      console.log('🔧 [TTL-EDITOR] Setting acceptedTypes:', types.length, 'types');
+      LOGGING.log('🔧 [TTL-EDITOR] Setting acceptedTypes:', types.length, 'types');
       this._acceptedTypes = types;
       this.updateFab();
     }
   }
   
   async connectedCallback() {
-    console.log('🔌 [TTL-EDITOR] connectedCallback - component added to DOM');
+    LOGGING.log('🔌 [TTL-EDITOR] connectedCallback - component added to DOM');
     
     try {
       // CRITICAL: Load mntl-space-fab dynamically (matching quad-form pattern)
       await this.loadMntlSpaceFab();
       
-      console.log('🎨 [TTL-EDITOR] Calling render()...');
+      LOGGING.log('🎨 [TTL-EDITOR] Calling render()...');
       this.render();
-      console.log('✅ [TTL-EDITOR] render() completed');
+      LOGGING.log('✅ [TTL-EDITOR] render() completed');
       
-      console.log('🎛️ [TTL-EDITOR] Calling setupFab()...');
+      LOGGING.log('🎛️ [TTL-EDITOR] Calling setupFab()...');
       this.setupFab();
-      console.log('✅ [TTL-EDITOR] setupFab() completed');
+      LOGGING.log('✅ [TTL-EDITOR] setupFab() completed');
       
-      console.log('🔗 [TTL-EDITOR] Calling attachEventListeners()...');
+      LOGGING.log('🔗 [TTL-EDITOR] Calling attachEventListeners()...');
       this.attachEventListeners();
-      console.log('✅ [TTL-EDITOR] attachEventListeners() completed');
+      LOGGING.log('✅ [TTL-EDITOR] attachEventListeners() completed');
       
-      console.log('⏰ [TTL-EDITOR] Calling updateAttribution()...');
+      LOGGING.log('⏰ [TTL-EDITOR] Calling updateAttribution()...');
       this.updateAttribution();
-      console.log('✅ [TTL-EDITOR] updateAttribution() completed');
+      LOGGING.log('✅ [TTL-EDITOR] updateAttribution() completed');
       
       this._updateTimer = setInterval(() => this.updateAttribution(), 1000);
-      console.log('✅ [TTL-EDITOR] Update timer started');
+      LOGGING.log('✅ [TTL-EDITOR] Update timer started');
     } catch (error) {
-      console.error('❌ [TTL-EDITOR] Error in connectedCallback:', error);
+      LOGGING.error('❌ [TTL-EDITOR] Error in connectedCallback:', error);
     }
   }
   
   async loadMntlSpaceFab() {
-    console.log('📦 [TTL-EDITOR] loadMntlSpaceFab() starting...');
+    LOGGING.log('📦 [TTL-EDITOR] loadMntlSpaceFab() starting...');
     
     // Check if already loaded
     if (customElements.get('mntl-space-fab')) {
-      console.log('✅ [TTL-EDITOR] mntl-space-fab already registered');
+      LOGGING.log('✅ [TTL-EDITOR] mntl-space-fab already registered');
       this._mntlSpaceFabLoaded = true;
       return;
     }
     
     // Try to dynamically load it from the server route
     try {
-      console.log('🔄 [TTL-EDITOR] Attempting to load mntl-space-fab from /mntl-space-fab/src/mntl-space-fab.js');
+      LOGGING.log('🔄 [TTL-EDITOR] Attempting to load mntl-space-fab from /mntl-space-fab/src/mntl-space-fab.js');
       await import('/mntl-space-fab/src/mntl-space-fab.js');
-      console.log('✅ [TTL-EDITOR] Successfully loaded mntl-space-fab');
+      LOGGING.log('✅ [TTL-EDITOR] Successfully loaded mntl-space-fab');
       this._mntlSpaceFabLoaded = true;
     } catch (err) {
-      console.error('❌ [TTL-EDITOR] Failed to load mntl-space-fab:', err);
+      LOGGING.error('❌ [TTL-EDITOR] Failed to load mntl-space-fab:', err);
       console.warn('⚠️ [TTL-EDITOR] Will show error message to user');
       this._mntlSpaceFabLoaded = false;
       // Don't throw - we'll show a fallback UI
@@ -127,17 +162,17 @@ class TTLEditorFormWC extends HTMLElement {
   }
   
   disconnectedCallback() {
-    console.log('🔌 [TTL-EDITOR] disconnectedCallback - component removed from DOM');
+    LOGGING.log('🔌 [TTL-EDITOR] disconnectedCallback - component removed from DOM');
     if (this._updateTimer) {
       clearInterval(this._updateTimer);
     }
   }
   
   render() {
-    console.log('🎨 [TTL-EDITOR] render() starting...');
+    LOGGING.log('🎨 [TTL-EDITOR] render() starting...');
     const identity = this._currentIdentity || 'not logged in';
     const isAuthenticated = !!this._currentIdentity;
-    console.log('🎨 [TTL-EDITOR] identity:', identity, 'isAuthenticated:', isAuthenticated);
+    LOGGING.log('🎨 [TTL-EDITOR] identity:', identity, 'isAuthenticated:', isAuthenticated);
     
     const html = `
       <style>
@@ -366,22 +401,22 @@ ex:Charlie a ex:Person ;
       </div>
     `;
     
-    console.log('🎨 [TTL-EDITOR] Setting shadowRoot.innerHTML (length:', html.length, ')');
+    LOGGING.log('🎨 [TTL-EDITOR] Setting shadowRoot.innerHTML (length:', html.length, ')');
     this.shadowRoot.innerHTML = html;
-    console.log('✅ [TTL-EDITOR] shadowRoot.innerHTML set');
+    LOGGING.log('✅ [TTL-EDITOR] shadowRoot.innerHTML set');
     
     // Verify elements exist
     const container = this.shadowRoot.querySelector('.form-container');
     const textarea = this.shadowRoot.getElementById('ttl-input');
     const fab = this.shadowRoot.getElementById('graph-fab');
-    console.log('🔍 [TTL-EDITOR] Elements check:');
-    console.log('  - .form-container:', !!container);
-    console.log('  - #ttl-input:', !!textarea);
-    console.log('  - #graph-fab:', !!fab);
+    LOGGING.log('🔍 [TTL-EDITOR] Elements check:');
+    LOGGING.log('  - .form-container:', !!container);
+    LOGGING.log('  - #ttl-input:', !!textarea);
+    LOGGING.log('  - #graph-fab:', !!fab);
   }
   
   setupFab() {
-    console.log('🎛️ [TTL-EDITOR] setupFab() starting...');
+    LOGGING.log('🎛️ [TTL-EDITOR] setupFab() starting...');
     
     if (!this._mntlSpaceFabLoaded) {
       console.warn('⚠️ [TTL-EDITOR] Skipping fab setup - component not loaded');
@@ -389,31 +424,31 @@ ex:Charlie a ex:Person ;
     }
     
     const fab = this.shadowRoot.getElementById('graph-fab');
-    console.log('🎛️ [TTL-EDITOR] fab element:', !!fab);
+    LOGGING.log('🎛️ [TTL-EDITOR] fab element:', !!fab);
     
     if (fab) {
-      console.log('🎛️ [TTL-EDITOR] Setting fab properties...');
+      LOGGING.log('🎛️ [TTL-EDITOR] Setting fab properties...');
       fab.currentIdentity = this._currentIdentity;
-      console.log('  - currentIdentity set:', this._currentIdentity);
+      LOGGING.log('  - currentIdentity set:', this._currentIdentity);
       
       fab.acceptedTypes = this._acceptedTypes;
-      console.log('  - acceptedTypes set:', this._acceptedTypes.length, 'types');
+      LOGGING.log('  - acceptedTypes set:', this._acceptedTypes.length, 'types');
       
       fab.value = this._defaultGraph;
-      console.log('  - value set:', this._defaultGraph);
+      LOGGING.log('  - value set:', this._defaultGraph);
       
       fab.addEventListener('graph-changed', () => {
-        console.log('📊 [TTL-EDITOR] graph-changed event received');
+        LOGGING.log('📊 [TTL-EDITOR] graph-changed event received');
         this.updateSubmitButton();
       });
-      console.log('  - event listener attached');
+      LOGGING.log('  - event listener attached');
     } else {
       console.warn('⚠️ [TTL-EDITOR] fab element not found!');
     }
   }
   
   updateFab() {
-    console.log('🔄 [TTL-EDITOR] updateFab() starting...');
+    LOGGING.log('🔄 [TTL-EDITOR] updateFab() starting...');
     
     if (!this._mntlSpaceFabLoaded) {
       console.warn('⚠️ [TTL-EDITOR] Skipping fab update - component not loaded');
@@ -427,47 +462,47 @@ ex:Charlie a ex:Person ;
       if (this._defaultGraph) {
         fab.value = this._defaultGraph;
       }
-      console.log('✅ [TTL-EDITOR] fab updated');
+      LOGGING.log('✅ [TTL-EDITOR] fab updated');
     } else {
       console.warn('⚠️ [TTL-EDITOR] fab element not found in updateFab');
     }
   }
   
   attachEventListeners() {
-    console.log('🔗 [TTL-EDITOR] attachEventListeners() starting...');
+    LOGGING.log('🔗 [TTL-EDITOR] attachEventListeners() starting...');
     const textarea = this.shadowRoot.getElementById('ttl-input');
     const submitBtn = this.shadowRoot.getElementById('submit-btn');
     const clearBtn = this.shadowRoot.getElementById('clear-btn');
     
-    console.log('🔗 [TTL-EDITOR] Elements:');
-    console.log('  - textarea:', !!textarea);
-    console.log('  - submitBtn:', !!submitBtn);
-    console.log('  - clearBtn:', !!clearBtn);
+    LOGGING.log('🔗 [TTL-EDITOR] Elements:');
+    LOGGING.log('  - textarea:', !!textarea);
+    LOGGING.log('  - submitBtn:', !!submitBtn);
+    LOGGING.log('  - clearBtn:', !!clearBtn);
     
     let debounceTimer;
     textarea?.addEventListener('input', (e) => {
-      console.log('✏️ [TTL-EDITOR] textarea input event');
+      LOGGING.log('✏️ [TTL-EDITOR] textarea input event');
       this.ttlContent = e.target.value;
       
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        console.log('🔍 [TTL-EDITOR] Validating TTL...');
+        LOGGING.log('🔍 [TTL-EDITOR] Validating TTL...');
         this.validateTTL();
         this.updateSubmitButton();
       }, 300);
     });
     
     submitBtn?.addEventListener('click', () => {
-      console.log('🚀 [TTL-EDITOR] Submit button clicked');
+      LOGGING.log('🚀 [TTL-EDITOR] Submit button clicked');
       this.handleSubmit();
     });
     
     clearBtn?.addEventListener('click', () => {
-      console.log('🗑️ [TTL-EDITOR] Clear button clicked');
+      LOGGING.log('🗑️ [TTL-EDITOR] Clear button clicked');
       this.clear();
     });
     
-    console.log('✅ [TTL-EDITOR] Event listeners attached');
+    LOGGING.log('✅ [TTL-EDITOR] Event listeners attached');
   }
   
   validateTTL() {
@@ -494,14 +529,14 @@ ex:Charlie a ex:Person ;
     }
     
     try {
-      console.log('🔍 [TTL-EDITOR] Parsing TTL with N3...');
+      LOGGING.log('🔍 [TTL-EDITOR] Parsing TTL with N3...');
       const parser = new N3.Parser();
       const triples = parser.parse(this.ttlContent);
       
       this.isValid = true;
       this.validationError = null;
       this.tripleCount = triples.length;
-      console.log('✅ [TTL-EDITOR] Valid TTL:', this.tripleCount, 'triples');
+      LOGGING.log('✅ [TTL-EDITOR] Valid TTL:', this.tripleCount, 'triples');
       
       textarea?.classList.remove('invalid');
       textarea?.classList.add('valid');
@@ -518,7 +553,7 @@ ex:Charlie a ex:Person ;
       }));
       
     } catch (error) {
-      console.error('❌ [TTL-EDITOR] Parse error:', error);
+      LOGGING.error('❌ [TTL-EDITOR] Parse error:', error);
       this.isValid = false;
       this.validationError = error.message;
       this.tripleCount = 0;
@@ -588,7 +623,7 @@ ex:Charlie a ex:Person ;
   }
   
   async handleSubmit() {
-    console.log('🚀 [TTL-EDITOR] handleSubmit() starting...');
+    LOGGING.log('🚀 [TTL-EDITOR] handleSubmit() starting...');
     if (!this.isValid || !this._currentIdentity || !this._mntlSpaceFabLoaded) return;
     
     const fab = this.shadowRoot.getElementById('graph-fab');
@@ -596,7 +631,7 @@ ex:Charlie a ex:Person ;
     const at = new Date().toISOString();
     const by = this._currentIdentity;
     
-    console.log('📦 [TTL-EDITOR] Submitting:', { graph, by, tripleCount: this.tripleCount });
+    LOGGING.log('📦 [TTL-EDITOR] Submitting:', { graph, by, tripleCount: this.tripleCount });
     
     try {
       if (this._mmmServer) {
@@ -621,7 +656,7 @@ ex:Charlie a ex:Person ;
         }
       }
       
-      console.log('✅ [TTL-EDITOR] Submission successful');
+      LOGGING.log('✅ [TTL-EDITOR] Submission successful');
       this.dispatchEvent(new CustomEvent('ttl-submitted', {
         detail: { ttl: this.ttlContent, graph, at, by, tripleCount: this.tripleCount },
         bubbles: true,
@@ -631,7 +666,7 @@ ex:Charlie a ex:Person ;
       this.clear();
       
     } catch (error) {
-      console.error('❌ [TTL-EDITOR] Submission failed:', error);
+      LOGGING.error('❌ [TTL-EDITOR] Submission failed:', error);
       
       this.dispatchEvent(new CustomEvent('ttl-error', {
         detail: { error },
@@ -644,7 +679,7 @@ ex:Charlie a ex:Person ;
   }
   
   clear() {
-    console.log('🗑️ [TTL-EDITOR] Clearing form...');
+    LOGGING.log('🗑️ [TTL-EDITOR] Clearing form...');
     this.ttlContent = '';
     this.isValid = false;
     this.validationError = null;
@@ -664,7 +699,7 @@ ex:Charlie a ex:Person ;
     }
     
     this.updateSubmitButton();
-    console.log('✅ [TTL-EDITOR] Form cleared');
+    LOGGING.log('✅ [TTL-EDITOR] Form cleared');
   }
   
   escapeHtml(text) {
@@ -674,8 +709,8 @@ ex:Charlie a ex:Person ;
   }
 }
 
-console.log('📝 [TTL-EDITOR] Registering custom element...');
+LOGGING.log('📝 [TTL-EDITOR] Registering custom element...');
 customElements.define('ttl-editor-form', TTLEditorFormWC);
-console.log('✅ [TTL-EDITOR] Custom element registered as ttl-editor-form');
+LOGGING.log('✅ [TTL-EDITOR] Custom element registered as ttl-editor-form');
 
 export { TTLEditorFormWC };
