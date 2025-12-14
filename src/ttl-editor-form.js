@@ -34,7 +34,7 @@ const LOGGING = {
 LOGGING.log('🔧 [TTL-EDITOR] Starting module...');
 LOGGING.enabled = false;
 // CRITICAL: Import N3 from CDN for browser compatibility
-import * as N3 from 'https://esm.sh/n3@1.17.2';
+import * as N3 from 'n3';
 LOGGING.log('✅ [TTL-EDITOR] N3 imported:', !!N3);
 
 

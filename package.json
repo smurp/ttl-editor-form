@@ -25,7 +25,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "n3": "^1.17.2",
-    "@mmmlib/mntl-space-fab": "github:smurp/mntl-space-fab#main"
+    "@mmmlib/mntl-space-fab": "workspace:*"
   },
   "repository": {
     "type": "git",
