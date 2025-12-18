@@ -10,6 +10,7 @@ A standalone web component for bulk Turtle (TTL) ingestion into MMM.
 - 📝 **Live validation** - Parse-on-the-fly with error highlighting
 - 🎛️ **Mental space selection** - Uses mntl-space-fab component
 - 🔒 **Authentication aware** - Submit only when authenticated
+- 🤖 **AI attribution support** - Track LLM-generated content with proper provenance
 - ✨ **Simple UX** - Clean, focused interface
 
 ## Installation
@@ -68,6 +69,8 @@ npm run dev
 
 ## Usage
 
+### Basic Usage
+
 ```html
 <script type="module" src="path/to/ttl-editor-form.js"></script>
 <ttl-editor-form></ttl-editor-form>
@@ -88,35 +91,150 @@ form.addEventListener('ttl-submitted', (e) => {
 });
 ```
 
+### AI-Generated Content
+
+When integrating with LLM-based TTL generation (e.g., `aigenviz`), use the AI attribution features to preserve provenance:
+
+```javascript
+const form = document.querySelector('ttl-editor-form');
+
+// Set AI attribution BEFORE setting content
+form.aiAttribution = 'llm:ollama/mistral:7b';
+form.setContent(generatedTTL);
+
+// The form will now:
+// - Display "by: llm:ollama/mistral:7b" with purple styling
+// - Show 🤖 AI badge
+// - Submit with by = 'llm:ollama/mistral:7b'
+
+// If the user edits the content:
+// - Badge changes to "🤖 AI (modified)"
+// - by reverts to currentIdentity
+// - Submit with by = currentIdentity
+```
+
 ## API Reference
 
 ### Properties
 
-- `mmmServer` - MMMServer instance for direct submission
-- `currentIdentity` - User identity (required for authentication)
-- `defaultGraph` - Default graph URI (default: 'mntl:publ/imported')
-- `acceptedTypes` - Array of mental space types
+| Property | Type | Description |
+|----------|------|-------------|
+| `mmmServer` | MMMServer | Server instance for direct submission |
+| `currentIdentity` | string | User identity (required for authentication) |
+| `defaultGraph` | string | Default graph URI (default: `'mntl:publ/imported'`) |
+| `acceptedTypes` | array | Array of mental space types |
+| `aiAttribution` | string | AI model identifier (e.g., `'llm:ollama/mistral:7b'`) |
 
-### Events
+### Read-Only Properties
 
-- `ttl-submitted` - Fired when TTL successfully submitted
-  - `detail: { ttl, graph, at, by, tripleCount }`
-- `validation-changed` - Fired when validation state changes
-  - `detail: { valid, error?, tripleCount? }`
-- `ttl-error` - Fired on submission error
-  - `detail: { error }`
+| Property | Type | Description |
+|----------|------|-------------|
+| `effectiveBy` | string | The identity that will be used for submission. Returns `aiAttribution` if content is unmodified, otherwise `currentIdentity`. |
+| `isValid` | boolean | Whether current TTL content is valid |
+| `tripleCount` | number | Number of triples in valid TTL |
 
 ### Methods
 
-- `clear()` - Clear the textarea and reset validation
+| Method | Description |
+|--------|-------------|
+| `setContent(ttl)` | Programmatically set TTL content. Resets modification tracking so AI attribution applies. |
+| `clear()` | Clear the textarea, reset validation, and clear AI attribution state. |
+
+### Events
+
+#### `ttl-submitted`
+Fired when TTL is successfully submitted.
+
+```javascript
+form.addEventListener('ttl-submitted', (e) => {
+  const { ttl, graph, at, by, tripleCount, wasAiGenerated, wasModified } = e.detail;
+  console.log(`Submitted ${tripleCount} triples as ${by}`);
+  if (wasAiGenerated && !wasModified) {
+    console.log('Content was AI-generated and unmodified');
+  }
+});
+```
+
+#### `validation-changed`
+Fired when validation state changes.
+
+```javascript
+form.addEventListener('validation-changed', (e) => {
+  const { valid, error, tripleCount } = e.detail;
+  if (valid) {
+    console.log(`Valid: ${tripleCount} triples`);
+  } else {
+    console.log(`Invalid: ${error}`);
+  }
+});
+```
+
+#### `ttl-error`
+Fired on submission error.
+
+```javascript
+form.addEventListener('ttl-error', (e) => {
+  console.error('Submission failed:', e.detail.error);
+});
+```
+
+## AI Attribution Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         aigenviz                                │
+│  User prompt → LLM → TTL                                        │
+│                        │                                        │
+│  form.aiAttribution = 'llm:provider/model'                      │
+│  form.setContent(ttl)                                           │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     ttl-editor-form                             │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ by: llm:ollama/mistral:7b  [🤖 AI]                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ @prefix ex: <http://example.org/> .                     │   │
+│  │ ex:Alice ex:knows ex:Bob .                              │   │
+│  │ ...                                          (purple    │   │
+│  │                                               border)   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│                    [Submit Turtle]                              │
+└─────────────────────────────────────────────────────────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │                               │
+    User edits                    User submits as-is
+         │                               │
+         ▼                               ▼
+┌─────────────────────┐     ┌─────────────────────────┐
+│ Badge: "AI (modified)"│   │ by: llm:ollama/mistral:7b│
+│ by: currentIdentity  │     │ (AI provenance preserved)│
+└─────────────────────┘     └─────────────────────────┘
+```
+
+## Visual Indicators
+
+| State | Border | Badge | `by:` color |
+|-------|--------|-------|-------------|
+| Empty | Gray | None | — |
+| Valid (user content) | Green | None | Green |
+| Invalid | Red | None | — |
+| AI-generated, unmodified | Purple | 🤖 AI | Purple |
+| AI-generated, modified | Green | 🤖 AI (modified) | Green |
 
 ## Component Loading
 
 The ttl-editor-form uses **dynamic loading** for its dependency on `mntl-space-fab`:
 
 - Automatically loads mntl-space-fab from `/mntl-space-fab/src/mntl-space-fab.js`
-- Graceful fallback with error message if component can't load
 - Requires MMM server to have registered the route: `app.use('/mntl-space-fab', ...)`
+- Throws error if component fails to load (no silent fallback)
 
 This matches the pattern used by quad-form for maximum portability across deployment contexts (browser, Electron, extensions, etc.).
 
@@ -140,7 +258,7 @@ router.post('/api/ingest-ttl', async (req, res) => {
         o: quad.object.value,
         g: graph,
         at: new Date().toISOString(),
-        by: by,
+        by: by,  // Will be AI attribution or user identity
         ...(quad.object.datatype && { d: quad.object.datatype.value }),
         ...(quad.object.language && { l: quad.object.language })
       }))

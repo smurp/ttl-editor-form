@@ -71,6 +71,11 @@ class TTLEditorFormWC extends HTMLElement {
     this._acceptedTypes = [...DEFAULT_ACCEPTED_TYPES];
     this._mntlSpaceFabLoaded = false;
     
+    // AI attribution support
+    this._aiAttribution = null;      // e.g., "llm:ollama/mistral:7b"
+    this._contentModifiedByUser = false;  // Tracks if user has edited AI-generated content
+    this._originalAiContent = null;  // Original AI content for comparison
+    
     this.ttlContent = '';
     this.isValid = false;
     this.validationError = null;
@@ -105,6 +110,49 @@ class TTLEditorFormWC extends HTMLElement {
       this._acceptedTypes = types;
       this.updateFab();
     }
+  }
+  
+  /**
+   * AI Attribution - when set, submissions will use this identity
+   * unless the user modifies the content
+   */
+  get aiAttribution() { return this._aiAttribution; }
+  set aiAttribution(value) {
+    LOGGING.log('🤖 [TTL-EDITOR] Setting aiAttribution:', value);
+    this._aiAttribution = value;
+    this._contentModifiedByUser = false;
+    this.updateAttribution();
+  }
+  
+  /**
+   * Get the effective "by" identity for submission
+   * Returns AI attribution if set and content unmodified, otherwise current user
+   */
+  get effectiveBy() {
+    if (this._aiAttribution && !this._contentModifiedByUser) {
+      return this._aiAttribution;
+    }
+    return this._currentIdentity;
+  }
+  
+  /**
+   * Programmatically set content (e.g., from AI generation)
+   * Resets the modified flag so AI attribution applies
+   */
+  setContent(ttl) {
+    LOGGING.log('📝 [TTL-EDITOR] setContent() called');
+    this.ttlContent = ttl;
+    this._originalAiContent = ttl;
+    this._contentModifiedByUser = false;
+    
+    const textarea = this.shadowRoot.getElementById('ttl-input');
+    if (textarea) {
+      textarea.value = ttl;
+    }
+    
+    this.validateTTL();
+    this.updateSubmitButton();
+    this.updateAttribution();
   }
   
   async connectedCallback() {
@@ -155,9 +203,7 @@ class TTLEditorFormWC extends HTMLElement {
       this._mntlSpaceFabLoaded = true;
     } catch (err) {
       LOGGING.error('❌ [TTL-EDITOR] Failed to load mntl-space-fab:', err);
-      console.warn('⚠️ [TTL-EDITOR] Will show error message to user');
-      this._mntlSpaceFabLoaded = false;
-      // Don't throw - we'll show a fallback UI
+      throw new Error('Required component mntl-space-fab failed to load');
     }
   }
   
@@ -216,8 +262,36 @@ class TTLEditorFormWC extends HTMLElement {
         
         .attr-value {
           font-family: 'Monaco', monospace;
-          color: ${isAuthenticated ? '#28a745' : '#dc3545'};
           font-weight: 500;
+        }
+        
+        .attr-value.authenticated {
+          color: #28a745;
+        }
+        
+        .attr-value.not-authenticated {
+          color: #dc3545;
+        }
+        
+        .attr-value.ai-source {
+          color: #6f42c1;
+        }
+        
+        .ai-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: #e9d5ff;
+          color: #6f42c1;
+          padding: 2px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          margin-left: 8px;
+        }
+        
+        .ai-badge.modified {
+          background: #fef3c7;
+          color: #92400e;
         }
         
         .section {
@@ -262,6 +336,10 @@ class TTLEditorFormWC extends HTMLElement {
           border-color: #28a745;
         }
         
+        .ttl-textarea.ai-generated {
+          border-color: #6f42c1;
+        }
+        
         .validation-status {
           margin-top: 10px;
           padding: 12px;
@@ -292,15 +370,6 @@ class TTLEditorFormWC extends HTMLElement {
           font-size: 12px;
           margin-top: 8px;
           white-space: pre-wrap;
-        }
-        
-        .component-error {
-          background: #f8d7da;
-          border: 2px solid #f5c6cb;
-          color: #721c24;
-          padding: 15px;
-          border-radius: 6px;
-          margin-bottom: 20px;
         }
         
         .submit-section {
@@ -359,6 +428,7 @@ class TTLEditorFormWC extends HTMLElement {
             <div class="attr-item">
               <span class="attr-label">by:</span>
               <span class="attr-value" id="by-value">${identity}</span>
+              <span class="ai-badge" id="ai-badge" style="display: none;">🤖 AI</span>
             </div>
           </div>
         </div>
@@ -383,13 +453,7 @@ ex:Charlie a ex:Person ;
         
         <div class="section">
           <label class="section-label">Target Graph</label>
-          ${this._mntlSpaceFabLoaded 
-            ? '<mntl-space-fab id="graph-fab"></mntl-space-fab>'
-            : `<div class="component-error">
-                 ❌ Failed to load mntl-space-fab component.<br>
-                 <small>Check that the MMM server is running and /mntl-space-fab/ route is registered.</small>
-               </div>`
-          }
+          <mntl-space-fab id="graph-fab"></mntl-space-fab>
         </div>
         
         <div class="submit-section">
@@ -418,11 +482,6 @@ ex:Charlie a ex:Person ;
   setupFab() {
     LOGGING.log('🎛️ [TTL-EDITOR] setupFab() starting...');
     
-    if (!this._mntlSpaceFabLoaded) {
-      console.warn('⚠️ [TTL-EDITOR] Skipping fab setup - component not loaded');
-      return;
-    }
-    
     const fab = this.shadowRoot.getElementById('graph-fab');
     LOGGING.log('🎛️ [TTL-EDITOR] fab element:', !!fab);
     
@@ -449,11 +508,6 @@ ex:Charlie a ex:Person ;
   
   updateFab() {
     LOGGING.log('🔄 [TTL-EDITOR] updateFab() starting...');
-    
-    if (!this._mntlSpaceFabLoaded) {
-      console.warn('⚠️ [TTL-EDITOR] Skipping fab update - component not loaded');
-      return;
-    }
     
     const fab = this.shadowRoot.getElementById('graph-fab');
     if (fab) {
@@ -483,6 +537,17 @@ ex:Charlie a ex:Person ;
     textarea?.addEventListener('input', (e) => {
       LOGGING.log('✏️ [TTL-EDITOR] textarea input event');
       this.ttlContent = e.target.value;
+      
+      // Check if user has modified AI-generated content
+      if (this._aiAttribution && this._originalAiContent !== null) {
+        const wasModified = this._contentModifiedByUser;
+        this._contentModifiedByUser = (this.ttlContent !== this._originalAiContent);
+        
+        if (wasModified !== this._contentModifiedByUser) {
+          LOGGING.log('🤖 [TTL-EDITOR] Content modification state changed:', this._contentModifiedByUser);
+          this.updateAttribution();
+        }
+      }
       
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -514,7 +579,7 @@ ex:Charlie a ex:Person ;
       this.validationError = null;
       this.tripleCount = 0;
       
-      textarea?.classList.remove('valid', 'invalid');
+      textarea?.classList.remove('valid', 'invalid', 'ai-generated');
       if (statusDiv) {
         statusDiv.className = 'validation-status empty';
         statusDiv.innerHTML = '⚠️ Enter some Turtle content to begin';
@@ -541,6 +606,13 @@ ex:Charlie a ex:Person ;
       textarea?.classList.remove('invalid');
       textarea?.classList.add('valid');
       
+      // Add AI styling if applicable
+      if (this._aiAttribution && !this._contentModifiedByUser) {
+        textarea?.classList.add('ai-generated');
+      } else {
+        textarea?.classList.remove('ai-generated');
+      }
+      
       if (statusDiv) {
         statusDiv.className = 'validation-status valid';
         statusDiv.innerHTML = `✅ Valid Turtle - ${this.tripleCount} triple${this.tripleCount !== 1 ? 's' : ''}`;
@@ -558,7 +630,7 @@ ex:Charlie a ex:Person ;
       this.validationError = error.message;
       this.tripleCount = 0;
       
-      textarea?.classList.remove('valid');
+      textarea?.classList.remove('valid', 'ai-generated');
       textarea?.classList.add('invalid');
       
       if (statusDiv) {
@@ -579,15 +651,6 @@ ex:Charlie a ex:Person ;
   
   updateSubmitButton() {
     const submitBtn = this.shadowRoot.getElementById('submit-btn');
-    
-    if (!this._mntlSpaceFabLoaded) {
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.title = 'Cannot submit - mntl-space-fab component not loaded';
-      }
-      return;
-    }
-    
     const fab = this.shadowRoot.getElementById('graph-fab');
     if (!submitBtn || !fab) return;
     
@@ -604,34 +667,69 @@ ex:Charlie a ex:Person ;
     } else if (!hasValidGraph) {
       submitBtn.title = 'Graph path is required';
     } else {
-      submitBtn.title = `Submit ${this.tripleCount} triple${this.tripleCount !== 1 ? 's' : ''}`;
+      const by = this.effectiveBy;
+      submitBtn.title = `Submit ${this.tripleCount} triple${this.tripleCount !== 1 ? 's' : ''} as ${by}`;
     }
   }
   
   updateAttribution() {
     const atValue = this.shadowRoot.getElementById('at-value');
     const byValue = this.shadowRoot.getElementById('by-value');
+    const aiBadge = this.shadowRoot.getElementById('ai-badge');
     
     if (atValue) {
       atValue.textContent = new Date().toISOString();
     }
     
     if (byValue) {
-      byValue.textContent = this._currentIdentity || 'not logged in';
-      byValue.style.color = this._currentIdentity ? '#28a745' : '#dc3545';
+      const effectiveIdentity = this.effectiveBy;
+      byValue.textContent = effectiveIdentity || 'not logged in';
+      
+      // Style based on attribution type
+      byValue.classList.remove('authenticated', 'not-authenticated', 'ai-source');
+      if (this._aiAttribution && !this._contentModifiedByUser) {
+        byValue.classList.add('ai-source');
+      } else if (effectiveIdentity) {
+        byValue.classList.add('authenticated');
+      } else {
+        byValue.classList.add('not-authenticated');
+      }
+    }
+    
+    // Show/hide AI badge
+    if (aiBadge) {
+      if (this._aiAttribution) {
+        aiBadge.style.display = 'inline-flex';
+        if (this._contentModifiedByUser) {
+          aiBadge.classList.add('modified');
+          aiBadge.textContent = '🤖 AI (modified)';
+          aiBadge.title = 'AI-generated content has been modified. Will submit as your identity.';
+        } else {
+          aiBadge.classList.remove('modified');
+          aiBadge.textContent = '🤖 AI';
+          aiBadge.title = `Will submit as ${this._aiAttribution}`;
+        }
+      } else {
+        aiBadge.style.display = 'none';
+      }
     }
   }
   
   async handleSubmit() {
     LOGGING.log('🚀 [TTL-EDITOR] handleSubmit() starting...');
-    if (!this.isValid || !this._currentIdentity || !this._mntlSpaceFabLoaded) return;
+    if (!this.isValid || !this._currentIdentity) return;
     
     const fab = this.shadowRoot.getElementById('graph-fab');
     const graph = fab.getValue();
     const at = new Date().toISOString();
-    const by = this._currentIdentity;
+    const by = this.effectiveBy;  // Uses AI attribution if content unmodified
     
-    LOGGING.log('📦 [TTL-EDITOR] Submitting:', { graph, by, tripleCount: this.tripleCount });
+    LOGGING.log('📦 [TTL-EDITOR] Submitting:', { 
+      graph, 
+      by, 
+      tripleCount: this.tripleCount,
+      isAiGenerated: this._aiAttribution && !this._contentModifiedByUser
+    });
     
     try {
       if (this._mmmServer) {
@@ -658,7 +756,15 @@ ex:Charlie a ex:Person ;
       
       LOGGING.log('✅ [TTL-EDITOR] Submission successful');
       this.dispatchEvent(new CustomEvent('ttl-submitted', {
-        detail: { ttl: this.ttlContent, graph, at, by, tripleCount: this.tripleCount },
+        detail: { 
+          ttl: this.ttlContent, 
+          graph, 
+          at, 
+          by, 
+          tripleCount: this.tripleCount,
+          wasAiGenerated: !!this._aiAttribution,
+          wasModified: this._contentModifiedByUser
+        },
         bubbles: true,
         composed: true
       }));
@@ -685,12 +791,17 @@ ex:Charlie a ex:Person ;
     this.validationError = null;
     this.tripleCount = 0;
     
+    // Reset AI attribution state
+    this._aiAttribution = null;
+    this._contentModifiedByUser = false;
+    this._originalAiContent = null;
+    
     const textarea = this.shadowRoot.getElementById('ttl-input');
     const statusDiv = this.shadowRoot.getElementById('validation-status');
     
     if (textarea) {
       textarea.value = '';
-      textarea.classList.remove('valid', 'invalid');
+      textarea.classList.remove('valid', 'invalid', 'ai-generated');
     }
     
     if (statusDiv) {
@@ -699,6 +810,7 @@ ex:Charlie a ex:Person ;
     }
     
     this.updateSubmitButton();
+    this.updateAttribution();
     LOGGING.log('✅ [TTL-EDITOR] Form cleared');
   }
   
