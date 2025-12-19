@@ -41,8 +41,23 @@ LOGGING.log('✅ [TTL-EDITOR] N3 imported:', !!N3);
 // NO STATIC IMPORT of mntl-space-fab - we'll load it dynamically
 LOGGING.log('🔧 [TTL-EDITOR] Will load mntl-space-fab dynamically when needed');
 
-// Default accepted types (only open and publ for security)
+// Default accepted types - full range of mental spaces
 const DEFAULT_ACCEPTED_TYPES = [
+  { 
+    value: 'mntl:mmry', 
+    label: 'mntl:mmry',
+    description: 'mntl:mmry - Ephemeral memory space (session-only)' 
+  },
+  { 
+    value: 'mntl:lock', 
+    label: 'mntl:lock/{identity}',
+    description: 'mntl:lock - Private, only you can see' 
+  },
+  { 
+    value: 'mntl:gate', 
+    label: 'mntl:gate/{identity}',
+    description: 'mntl:gate - Gated, controlled access' 
+  },
   { 
     value: 'mntl:open', 
     label: 'mntl:open/{identity}',
@@ -132,7 +147,49 @@ class TTLEditorFormWC extends HTMLElement {
     if (this._aiAttribution && !this._contentModifiedByUser) {
       return this._aiAttribution;
     }
+    // If currentIdentity not set, try to discover it
+    if (!this._currentIdentity) {
+      this._currentIdentity = this.discoverIdentity();
+    }
     return this._currentIdentity;
+  }
+  
+  /**
+   * Try to discover current user identity from various sources
+   */
+  discoverIdentity() {
+    // Try window.noosclient
+    if (window.noosclient?.currentIdentity) {
+      return window.noosclient.currentIdentity;
+    }
+    
+    // Try window.currentIdentity
+    if (window.currentIdentity) {
+      return window.currentIdentity;
+    }
+    
+    // Try localStorage
+    try {
+      const stored = localStorage.getItem('mmm:identity');
+      if (stored) return stored;
+    } catch (e) {
+      // localStorage not available
+    }
+    
+    // Try JWT token parsing
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.sub || payload.email) {
+          return payload.sub || `mailto:${payload.email}`;
+        }
+      }
+    } catch (e) {
+      // Token parsing failed
+    }
+    
+    return null;
   }
   
   /**
@@ -159,6 +216,14 @@ class TTLEditorFormWC extends HTMLElement {
     LOGGING.log('🔌 [TTL-EDITOR] connectedCallback - component added to DOM');
     
     try {
+      // Try to discover identity if not already set
+      if (!this._currentIdentity) {
+        this._currentIdentity = this.discoverIdentity();
+        if (this._currentIdentity) {
+          LOGGING.log('🔍 [TTL-EDITOR] Discovered identity:', this._currentIdentity);
+        }
+      }
+      
       // CRITICAL: Load mntl-space-fab dynamically (matching quad-form pattern)
       await this.loadMntlSpaceFab();
       
